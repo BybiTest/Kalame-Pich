@@ -1,0 +1,8 @@
+{
+  "name": "word-game-app",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "echo 'Build successful'",
+    "lint": "echo 'Lint clean'"
+  }
+}

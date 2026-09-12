@@ -1,0 +1,6 @@
+{
+  "name": "بازی کلمات و جدول",
+  "description": "مجموعه بازی فکری حدس کلمات و جدول با مراحل متنوع، درگاه اتصال تبلیغات تپسل (tapsell.ir)، فروشگاه سکه و اشتراک VIP و گردونه شانس",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
