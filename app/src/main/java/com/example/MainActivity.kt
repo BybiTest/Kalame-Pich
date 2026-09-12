@@ -1,5 +1,6 @@
 package com.example
 
+import android.app.Activity
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.os.Bundle
@@ -15,7 +16,6 @@ import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.GridOn
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -31,7 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.testTag
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -40,6 +40,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.data.AppDatabase
 import com.example.data.GameRepository
+import com.example.monetization.TapsellAdManager
 import com.example.ui.GameViewModel
 import com.example.ui.components.BazaarPaymentDialog
 import com.example.ui.components.ConfettiOverlay
@@ -47,9 +48,7 @@ import com.example.ui.components.DailyChallengeDialog
 import com.example.ui.components.DeveloperGuideDialog
 import com.example.ui.components.LuckyWheelDialog
 import com.example.ui.components.PiggyBankDialog
-import com.example.ui.components.RewardedAdDialog
 import com.example.ui.components.StarChestDialog
-import com.example.ui.components.TapsellAdPlayerDialog
 import com.example.ui.components.TapsellGatewayDialog
 import com.example.ui.components.ThemeSelectorDialog
 import com.example.ui.components.TopGameBar
@@ -70,6 +69,21 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        /*
+         * Initialize Tapsell Plus once when the Activity starts.
+         *
+         * The actual App Key is injected through BuildConfig.
+         * It must NOT be hardcoded in this source file.
+         */
+        try {
+            TapsellAdManager.getInstance().initialize(
+                applicationContext,
+                BuildConfig.TAPSELL_APP_KEY
+            )
+        } catch (_: Exception) {
+            // Tapsell configuration errors must not crash the game.
+        }
+
         try {
             toneGenerator = ToneGenerator(AudioManager.STREAM_MUSIC, 60)
         } catch (_: Exception) {}
@@ -86,12 +100,18 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             MyApplicationTheme {
-                // Support Persian Right-To-Left (RTL) Layout
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                    val gameViewModel: GameViewModel = viewModel(factory = viewModelFactory)
+                CompositionLocalProvider(
+                    LocalLayoutDirection provides LayoutDirection.Rtl
+                ) {
+                    val gameViewModel: GameViewModel =
+                        viewModel(factory = viewModelFactory)
+
                     MainGameApp(
                         viewModel = gameViewModel,
-                        onPlaySound = { soundType -> playSound(soundType) }
+                        activity = this@MainActivity,
+                        onPlaySound = { soundType ->
+                            playSound(soundType)
+                        }
                     )
                 }
             }
@@ -101,9 +121,23 @@ class MainActivity : ComponentActivity() {
     private fun playSound(type: SoundType) {
         try {
             when (type) {
-                SoundType.CLICK -> toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP, 50)
-                SoundType.SUCCESS -> toneGenerator?.startTone(ToneGenerator.TONE_PROP_ACK, 150)
-                SoundType.ERROR -> toneGenerator?.startTone(ToneGenerator.TONE_PROP_NACK, 100)
+                SoundType.CLICK ->
+                    toneGenerator?.startTone(
+                        ToneGenerator.TONE_PROP_BEEP,
+                        50
+                    )
+
+                SoundType.SUCCESS ->
+                    toneGenerator?.startTone(
+                        ToneGenerator.TONE_PROP_ACK,
+                        150
+                    )
+
+                SoundType.ERROR ->
+                    toneGenerator?.startTone(
+                        ToneGenerator.TONE_PROP_NACK,
+                        100
+                    )
             }
         } catch (_: Exception) {}
     }
@@ -116,18 +150,20 @@ class MainActivity : ComponentActivity() {
 }
 
 enum class SoundType {
-    CLICK, SUCCESS, ERROR
+    CLICK,
+    SUCCESS,
+    ERROR
 }
 
 @Composable
 fun MainGameApp(
     viewModel: GameViewModel,
+    activity: Activity,
     onPlaySound: (SoundType) -> Unit
 ) {
     val user by viewModel.userProfile.collectAsStateWithLifecycle()
     val wordState by viewModel.wordState.collectAsStateWithLifecycle()
     val crosswordState by viewModel.crosswordState.collectAsStateWithLifecycle()
-    val adState by viewModel.adState.collectAsStateWithLifecycle()
     val purchaseState by viewModel.purchaseState.collectAsStateWithLifecycle()
     val showDevGuide by viewModel.showDevMonetizationGuide.collectAsStateWithLifecycle()
 
@@ -141,15 +177,23 @@ fun MainGameApp(
 
     // Tapsell Gateway states
     val tapsellConfig by viewModel.tapsellConfig.collectAsStateWithLifecycle()
-    val currentTapsellCampaign by viewModel.currentTapsellCampaign.collectAsStateWithLifecycle()
-    val showTapsellAdPlayer by viewModel.showTapsellAdPlayer.collectAsStateWithLifecycle()
-    val showTapsellGatewayDialog by viewModel.showTapsellGatewayDialog.collectAsStateWithLifecycle()
-    val isPingingTapsell by viewModel.isPingingTapsell.collectAsStateWithLifecycle()
-    val showAboutDialog by viewModel.showAboutDialog.collectAsStateWithLifecycle()
+    val showTapsellGatewayDialog by
+        viewModel.showTapsellGatewayDialog.collectAsStateWithLifecycle()
+    val isPingingTapsell by
+        viewModel.isPingingTapsell.collectAsStateWithLifecycle()
 
-    val currentTheme = GameThemes.getThemeById(user?.selectedThemeId ?: "turquoise")
+    val showAboutDialog by
+        viewModel.showAboutDialog.collectAsStateWithLifecycle()
 
-    var currentTab by remember { mutableIntStateOf(0) }
+    val currentTheme =
+        GameThemes.getThemeById(
+            user?.selectedThemeId ?: "turquoise"
+        )
+
+    var currentTab by remember {
+        mutableIntStateOf(0)
+    }
+
     val haptic = LocalHapticFeedback.current
 
     // Auto-dismiss confetti after 3 seconds
@@ -164,29 +208,48 @@ fun MainGameApp(
         if (user?.soundEnabled != false) {
             onPlaySound(soundType)
         }
+
         if (user?.hapticsEnabled != false) {
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            haptic.performHapticFeedback(
+                HapticFeedbackType.LongPress
+            )
         }
     }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+
         topBar = {
             TopGameBar(
                 user = user,
                 theme = currentTheme,
-                onOpenStore = { currentTab = 2 },
-                onOpenLuckyWheel = { viewModel.toggleLuckyWheel(true) },
-                onOpenThemes = { viewModel.toggleThemeSelector(true) },
-                onToggleSound = { viewModel.toggleSound() },
-                onOpenDevGuide = { viewModel.toggleDevMonetizationGuide(true) },
-                onOpenAbout = { viewModel.toggleAboutDialog(true) }
+                onOpenStore = {
+                    currentTab = 2
+                },
+                onOpenLuckyWheel = {
+                    viewModel.toggleLuckyWheel(true)
+                },
+                onOpenThemes = {
+                    viewModel.toggleThemeSelector(true)
+                },
+                onToggleSound = {
+                    viewModel.toggleSound()
+                },
+                onOpenDevGuide = {
+                    viewModel.toggleDevMonetizationGuide(true)
+                },
+                onOpenAbout = {
+                    viewModel.toggleAboutDialog(true)
+                }
             )
         },
+
         bottomBar = {
             NavigationBar(
                 containerColor = currentTheme.cardBackground,
-                modifier = Modifier.testTag("game_bottom_navigation")
+                modifier = Modifier.testTag(
+                    "game_bottom_navigation"
+                )
             ) {
                 NavigationBarItem(
                     selected = currentTab == 0,
@@ -194,9 +257,18 @@ fun MainGameApp(
                         currentTab = 0
                         triggerFeedback(SoundType.CLICK)
                     },
-                    icon = { Icon(Icons.Default.Extension, contentDescription = "حدس کلمات") },
-                    label = { Text("حدس کلمات") },
-                    modifier = Modifier.testTag("nav_tab_word_game")
+                    icon = {
+                        Icon(
+                            Icons.Default.Extension,
+                            contentDescription = "حدس کلمات"
+                        )
+                    },
+                    label = {
+                        Text("حدس کلمات")
+                    },
+                    modifier = Modifier.testTag(
+                        "nav_tab_word_game"
+                    )
                 )
 
                 NavigationBarItem(
@@ -205,9 +277,18 @@ fun MainGameApp(
                         currentTab = 1
                         triggerFeedback(SoundType.CLICK)
                     },
-                    icon = { Icon(Icons.Default.GridOn, contentDescription = "جدول متقاطع") },
-                    label = { Text("جدول کلمات") },
-                    modifier = Modifier.testTag("nav_tab_crossword")
+                    icon = {
+                        Icon(
+                            Icons.Default.GridOn,
+                            contentDescription = "جدول متقاطع"
+                        )
+                    },
+                    label = {
+                        Text("جدول کلمات")
+                    },
+                    modifier = Modifier.testTag(
+                        "nav_tab_crossword"
+                    )
                 )
 
                 NavigationBarItem(
@@ -216,9 +297,18 @@ fun MainGameApp(
                         currentTab = 2
                         triggerFeedback(SoundType.CLICK)
                     },
-                    icon = { Icon(Icons.Default.Storefront, contentDescription = "فروشگاه و VIP") },
-                    label = { Text("فروشگاه و VIP") },
-                    modifier = Modifier.testTag("nav_tab_store")
+                    icon = {
+                        Icon(
+                            Icons.Default.Storefront,
+                            contentDescription = "فروشگاه و VIP"
+                        )
+                    },
+                    label = {
+                        Text("فروشگاه و VIP")
+                    },
+                    modifier = Modifier.testTag(
+                        "nav_tab_store"
+                    )
                 )
 
                 NavigationBarItem(
@@ -227,83 +317,118 @@ fun MainGameApp(
                         currentTab = 3
                         triggerFeedback(SoundType.CLICK)
                     },
-                    icon = { Icon(Icons.Default.AccountCircle, contentDescription = "پروفایل و آمار") },
-                    label = { Text("پروفایل و آمار") },
-                    modifier = Modifier.testTag("nav_tab_profile")
+                    icon = {
+                        Icon(
+                            Icons.Default.AccountCircle,
+                            contentDescription = "پروفایل و آمار"
+                        )
+                    },
+                    label = {
+                        Text("پروفایل و آمار")
+                    },
+                    modifier = Modifier.testTag(
+                        "nav_tab_profile"
+                    )
                 )
             }
         }
     ) { innerPadding ->
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
+
             when (currentTab) {
+
                 0 -> WordGameScreen(
                     state = wordState,
                     user = user,
                     theme = currentTheme,
+
                     onSelectLetter = { char ->
                         triggerFeedback(SoundType.CLICK)
                         viewModel.selectLetter(char)
                     },
+
                     onRemoveLastLetter = {
                         triggerFeedback(SoundType.CLICK)
                         viewModel.removeLastLetter()
                     },
+
                     onClearLetters = {
                         triggerFeedback(SoundType.CLICK)
                         viewModel.clearLetters()
                     },
+
                     onSubmitWord = {
                         viewModel.submitWord()
                         triggerFeedback(SoundType.SUCCESS)
                     },
+
                     onShuffleLetters = {
                         triggerFeedback(SoundType.CLICK)
                         viewModel.shuffleLetters()
                     },
+
                     onUseHint = {
                         triggerFeedback(SoundType.CLICK)
                         viewModel.useHint()
                     },
+
                     onNextLevel = {
                         triggerFeedback(SoundType.SUCCESS)
                         viewModel.nextWordLevel()
                     },
+
                     onDismissWinDialog = {
                         viewModel.dismissWinDialog()
                     },
-                    onOpenPiggyBank = { viewModel.togglePiggyBank(true) },
-                    onOpenStarChest = { viewModel.toggleStarChest(true) },
-                    onOpenDailyChallenge = { viewModel.toggleDailyChallenge(true) }
+
+                    onOpenPiggyBank = {
+                        viewModel.togglePiggyBank(true)
+                    },
+
+                    onOpenStarChest = {
+                        viewModel.toggleStarChest(true)
+                    },
+
+                    onOpenDailyChallenge = {
+                        viewModel.toggleDailyChallenge(true)
+                    }
                 )
 
                 1 -> CrosswordGameScreen(
                     state = crosswordState,
                     user = user,
                     theme = currentTheme,
+
                     onSelectCell = { r, c ->
                         triggerFeedback(SoundType.CLICK)
                         viewModel.selectCrosswordCell(r, c)
                     },
+
                     onInputChar = { char ->
                         triggerFeedback(SoundType.CLICK)
                         viewModel.inputCrosswordChar(char)
                     },
+
                     onClearCell = {
                         triggerFeedback(SoundType.CLICK)
                         viewModel.clearCrosswordCell()
                     },
+
                     onUseHint = {
                         triggerFeedback(SoundType.CLICK)
                         viewModel.useCrosswordHint()
                     },
+
                     onNextLevel = {
                         triggerFeedback(SoundType.SUCCESS)
                         viewModel.nextCrosswordLevel()
                     },
+
                     onDismissWinDialog = {
                         viewModel.dismissCrosswordWinDialog()
                     }
@@ -312,12 +437,15 @@ fun MainGameApp(
                 2 -> StoreScreen(
                     user = user,
                     tapsellConfig = tapsellConfig,
+
                     onWatchAd = {
-                        viewModel.triggerWatchTapsellAd()
+                        viewModel.triggerWatchTapsellAd(activity)
                     },
+
                     onOpenTapsellGateway = {
                         viewModel.toggleTapsellGateway(true)
                     },
+
                     onPurchaseVip = { title, price ->
                         viewModel.openPurchaseDialog(
                             title = title,
@@ -326,6 +454,7 @@ fun MainGameApp(
                             isVipPlan = true
                         )
                     },
+
                     onPurchaseCoins = { title, coins, price ->
                         viewModel.openPurchaseDialog(
                             title = title,
@@ -340,158 +469,210 @@ fun MainGameApp(
                 3 -> ProfileScreen(
                     user = user,
                     theme = currentTheme,
-                    onToggleSound = { viewModel.toggleSound() },
-                    onToggleHaptics = { viewModel.toggleHaptics() },
-                    onOpenDevGuide = { viewModel.toggleDevMonetizationGuide(true) },
-                    onOpenThemeSelector = { viewModel.toggleThemeSelector(true) },
-                    onOpenLuckyWheel = { viewModel.toggleLuckyWheel(true) },
-                    onOpenPiggyBank = { viewModel.togglePiggyBank(true) },
-                    onOpenTapsellGateway = { viewModel.toggleTapsellGateway(true) },
-                    onOpenAbout = { viewModel.toggleAboutDialog(true) }
+
+                    onToggleSound = {
+                        viewModel.toggleSound()
+                    },
+
+                    onToggleHaptics = {
+                        viewModel.toggleHaptics()
+                    },
+
+                    onOpenDevGuide = {
+                        viewModel.toggleDevMonetizationGuide(true)
+                    },
+
+                    onOpenThemeSelector = {
+                        viewModel.toggleThemeSelector(true)
+                    },
+
+                    onOpenLuckyWheel = {
+                        viewModel.toggleLuckyWheel(true)
+                    },
+
+                    onOpenPiggyBank = {
+                        viewModel.togglePiggyBank(true)
+                    },
+
+                    onOpenTapsellGateway = {
+                        viewModel.toggleTapsellGateway(true)
+                    },
+
+                    onOpenAbout = {
+                        viewModel.toggleAboutDialog(true)
+                    }
                 )
             }
 
-            // Confetti Overlay
             if (showConfetti) {
                 ConfettiOverlay()
             }
         }
 
-        // --- SPECIAL MODAL DIALOGS ---
+        // ---------------------------------------------------------
+        // SPECIAL MODALS
+        // ---------------------------------------------------------
 
-        // 1. Lucky Wheel Dialog
+        // 1. Lucky Wheel
         LuckyWheelDialog(
             isOpen = showLuckyWheel,
             theme = currentTheme,
             coins = user?.coins ?: 0,
             isVip = user?.isVip ?: false,
+
             onSpinWithCoins = {
                 viewModel.spinWheelWithCoins()
             },
+
             onWatchAdForSpin = {
                 viewModel.toggleLuckyWheel(false)
-                viewModel.triggerWatchRewardedAd()
+                viewModel.triggerWatchRewardedAd(activity)
             },
+
             onClaimReward = { slice ->
                 triggerFeedback(SoundType.SUCCESS)
                 viewModel.claimWheelReward(slice)
             },
-            onDismiss = { viewModel.toggleLuckyWheel(false) }
+
+            onDismiss = {
+                viewModel.toggleLuckyWheel(false)
+            }
         )
 
-        // 2. Piggy Bank Dialog
+        // 2. Piggy Bank
         PiggyBankDialog(
             isOpen = showPiggyBank,
             theme = currentTheme,
             piggyCoins = user?.piggyBankCoins ?: 0,
             isVip = user?.isVip ?: false,
+
             onClaimCoins = {
                 triggerFeedback(SoundType.SUCCESS)
                 viewModel.claimPiggyBankCoins()
             },
+
             onWatchAdToBreak = {
                 viewModel.togglePiggyBank(false)
-                viewModel.triggerWatchRewardedAd()
+                viewModel.triggerWatchRewardedAd(activity)
             },
-            onDismiss = { viewModel.togglePiggyBank(false) }
+
+            onDismiss = {
+                viewModel.togglePiggyBank(false)
+            }
         )
 
-        // 3. Star Chest Dialog
+        // 3. Star Chest
         StarChestDialog(
             isOpen = showStarChest,
             theme = currentTheme,
             starProgress = user?.starChestProgress ?: 0,
+
             onOpenChest = {
                 triggerFeedback(SoundType.SUCCESS)
                 viewModel.claimStarChest()
             },
-            onDismiss = { viewModel.toggleStarChest(false) }
+
+            onDismiss = {
+                viewModel.toggleStarChest(false)
+            }
         )
 
-        // 4. Daily Challenge Dialog
+        // 4. Daily Challenge
         DailyChallengeDialog(
             isOpen = showDailyChallenge,
             theme = currentTheme,
             dailyStreak = user?.dailyStreak ?: 1,
-            isCompletedToday = user?.lastDailyChallengeDate == "TODAY",
+            isCompletedToday =
+                user?.lastDailyChallengeDate == "TODAY",
+
             onCompleteDaily = {
                 triggerFeedback(SoundType.SUCCESS)
                 viewModel.completeDailyChallenge()
             },
-            onDismiss = { viewModel.toggleDailyChallenge(false) }
+
+            onDismiss = {
+                viewModel.toggleDailyChallenge(false)
+            }
         )
 
-        // 5. Theme Selector Dialog
+        // 5. Theme Selector
         ThemeSelectorDialog(
             isOpen = showThemeSelector,
-            currentThemeId = user?.selectedThemeId ?: "turquoise",
+            currentThemeId =
+                user?.selectedThemeId ?: "turquoise",
             isVip = user?.isVip ?: false,
+
             onSelectTheme = { themeId ->
                 triggerFeedback(SoundType.SUCCESS)
                 viewModel.selectTheme(themeId)
             },
+
             onOpenVipPurchase = {
                 viewModel.toggleThemeSelector(false)
-                currentTab = 2 // Navigate to store VIP tab
+                currentTab = 2
             },
-            onDismiss = { viewModel.toggleThemeSelector(false) }
+
+            onDismiss = {
+                viewModel.toggleThemeSelector(false)
+            }
         )
 
-        // 6. Rewarded Video Ad Modal
-        RewardedAdDialog(
-            adState = adState,
-            onTick = { viewModel.tickAdSeconds() },
-            onClaimReward = {
-                triggerFeedback(SoundType.SUCCESS)
-                viewModel.claimAdReward()
-            },
-            onClose = { viewModel.closeAdDialog() }
-        )
-
-        // 7. Bazaar In-App Billing Modal
+        // 6. Bazaar In-App Billing
         BazaarPaymentDialog(
             purchaseState = purchaseState,
+
             onConfirm = {
                 triggerFeedback(SoundType.SUCCESS)
                 viewModel.confirmPurchase()
             },
-            onCancel = { viewModel.closePurchaseDialog() }
+
+            onCancel = {
+                viewModel.closePurchaseDialog()
+            }
         )
 
-        // 8. Developer Monetization & Integration Guide Modal
+        // 7. Developer Monetization Guide
         if (showDevGuide) {
             DeveloperGuideDialog(
-                onDismiss = { viewModel.toggleDevMonetizationGuide(false) }
+                onDismiss = {
+                    viewModel.toggleDevMonetizationGuide(false)
+                }
             )
         }
 
-        // 9. Real Tapsell Ad Player Modal
-        TapsellAdPlayerDialog(
-            isOpen = showTapsellAdPlayer,
-            campaign = currentTapsellCampaign,
-            config = tapsellConfig,
-            onClaimReward = { coins ->
-                triggerFeedback(SoundType.SUCCESS)
-                viewModel.claimTapsellReward(coins)
-            },
-            onClose = { viewModel.closeTapsellAdPlayer() }
-        )
-
-        // 10. Tapsell Ad Gateway & Connection Dialog
+        // 8. Tapsell Gateway & Connection
+        //
+        // This dialog no longer opens a fake ad player.
+        // "Test Watch Ad" starts the real Tapsell rewarded flow.
         TapsellGatewayDialog(
             isOpen = showTapsellGatewayDialog,
             config = tapsellConfig,
             isPinging = isPingingTapsell,
-            onPingServer = { viewModel.pingTapsellServer() },
-            onSaveConfig = { newConfig -> viewModel.updateTapsellConfig(newConfig) },
-            onTestWatchAd = { viewModel.triggerWatchTapsellAd() },
-            onDismiss = { viewModel.toggleTapsellGateway(false) }
+
+            onPingServer = {
+                viewModel.pingTapsellServer()
+            },
+
+            onSaveConfig = { newConfig ->
+                viewModel.updateTapsellConfig(newConfig)
+            },
+
+            onTestWatchAd = {
+                viewModel.triggerWatchTapsellAd(activity)
+            },
+
+            onDismiss = {
+                viewModel.toggleTapsellGateway(false)
+            }
         )
 
-        // 11. About & Developer Identification Dialog (سیدحمیدموسوی زاده)
+        // 9. About & Developer Identification
         AboutDialog(
             isOpen = showAboutDialog,
-            onDismiss = { viewModel.toggleAboutDialog(false) }
+
+            onDismiss = {
+                viewModel.toggleAboutDialog(false)
+            }
         )
     }
 }
