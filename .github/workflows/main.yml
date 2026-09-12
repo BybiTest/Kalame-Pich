@@ -1,0 +1,58 @@
+name: Build APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Make Gradle executable
+        run: |
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+          fi
+
+      - name: Show project structure
+        run: |
+          echo "=== Project files ==="
+          find . -maxdepth 3 -type f | sort | head -300
+          echo "=== Gradle files ==="
+          find . -name "build.gradle" -o -name "build.gradle.kts" -o -name "settings.gradle" -o -name "settings.gradle.kts"
+
+      - name: Build Debug APK
+        run: |
+          if [ -f "./gradlew" ]; then
+            ./gradlew assembleDebug --stacktrace
+          else
+            echo "ERROR: gradlew not found."
+            exit 1
+          fi
+
+      - name: Find APK
+        run: |
+          echo "=== APK files ==="
+          find . -type f -name "*.apk" -print
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kalame-Pich-debug-apk
+          path: "**/build/outputs/apk/**/*.apk"
+          if-no-files-found: error
