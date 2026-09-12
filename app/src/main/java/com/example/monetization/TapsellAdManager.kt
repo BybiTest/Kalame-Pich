@@ -3,6 +3,7 @@ package com.example.monetization
 import android.app.Activity
 import android.content.Context
 import android.util.Log
+import androidx.annotation.NonNull
 import com.example.BuildConfig
 import ir.tapsell.plus.AdRequestCallback
 import ir.tapsell.plus.AdShowListener
@@ -11,19 +12,22 @@ import ir.tapsell.plus.model.TapsellPlusAdModel
 import ir.tapsell.plus.model.TapsellPlusErrorModel
 
 /**
- * Real Tapsell Plus implementation.
+ * Real Tapsell Plus rewarded-ad manager.
  *
- * Important security rule:
- * Coins/rewards must ONLY be granted from the real
- * TapsellPlus AdShowListener.onRewarded callback.
+ * SECURITY RULE:
+ * The app must grant coins ONLY from the real
+ * TapsellPlus AdShowListener.onRewarded() callback.
  *
- * Closing the ad, waiting for a timer, clicking a button,
- * or dismissing a dialog NEVER grants a reward.
+ * Closing the ad, a timer, a button click, or a fake
+ * dialog NEVER grants a reward.
  */
 class TapsellAdManager private constructor() : AdManager {
 
     companion object {
+
         private const val TAG = "TapsellAdManager"
+
+        private const val REWARD_COINS = 50
 
         @Volatile
         private var instance: TapsellAdManager? = null
@@ -37,9 +41,14 @@ class TapsellAdManager private constructor() : AdManager {
         }
     }
 
-    private var appKey: String = BuildConfig.TAPSELL_APP_KEY
-    private var rewardedZoneId: String = BuildConfig.TAPSELL_REWARDED_ZONE_ID
-    private var bannerZoneId: String = BuildConfig.TAPSELL_BANNER_ZONE_ID
+    private var appKey: String =
+        BuildConfig.TAPSELL_APP_KEY
+
+    private var rewardedZoneId: String =
+        BuildConfig.TAPSELL_REWARDED_ZONE_ID
+
+    private var bannerZoneId: String =
+        BuildConfig.TAPSELL_BANNER_ZONE_ID
 
     private var initialized = false
 
@@ -50,19 +59,33 @@ class TapsellAdManager private constructor() : AdManager {
     private var rewardedResponseId: String? = null
 
     /**
-     * Prevents duplicate reward delivery for the same ad.
+     * Response ID for which the reward callback has already
+     * been delivered.
+     *
+     * This prevents duplicate rewards.
      */
-    private var rewardDeliveredForResponseId: String? = null
+    private var rewardedResponseAlreadyDelivered: String? = null
 
-    override fun initialize(context: Context, appKey: String) {
-        this.appKey = if (appKey.isNotBlank()) {
-            appKey
-        } else {
-            BuildConfig.TAPSELL_APP_KEY
-        }
+    // -------------------------------------------------------------------------
+    // Initialization
+    // -------------------------------------------------------------------------
 
-        rewardedZoneId = BuildConfig.TAPSELL_REWARDED_ZONE_ID
-        bannerZoneId = BuildConfig.TAPSELL_BANNER_ZONE_ID
+    override fun initialize(
+        context: Context,
+        appKey: String
+    ) {
+        this.appKey =
+            if (appKey.isNotBlank()) {
+                appKey
+            } else {
+                BuildConfig.TAPSELL_APP_KEY
+            }
+
+        rewardedZoneId =
+            BuildConfig.TAPSELL_REWARDED_ZONE_ID
+
+        bannerZoneId =
+            BuildConfig.TAPSELL_BANNER_ZONE_ID
 
         if (!isConfigured()) {
             initialized = false
@@ -70,13 +93,16 @@ class TapsellAdManager private constructor() : AdManager {
             Log.w(
                 TAG,
                 "Tapsell is not configured. " +
-                        "Set TAPSELL_APP_KEY and Tapsell Zone IDs."
+                        "TAPSELL_APP_KEY is missing."
             )
 
             return
         }
 
         try {
+            /*
+             * Tapsell Plus SDK initialization.
+             */
             TapsellPlus.initialize(
                 context.applicationContext,
                 this.appKey
@@ -88,7 +114,9 @@ class TapsellAdManager private constructor() : AdManager {
                 TAG,
                 "Tapsell Plus initialized successfully."
             )
+
         } catch (exception: Exception) {
+
             initialized = false
 
             Log.e(
@@ -99,9 +127,10 @@ class TapsellAdManager private constructor() : AdManager {
         }
     }
 
-    /**
-     * Returns true only when a real App Key exists.
-     */
+    // -------------------------------------------------------------------------
+    // Configuration
+    // -------------------------------------------------------------------------
+
     fun isConfigured(): Boolean {
         return appKey.isNotBlank() &&
                 !appKey.contains(
@@ -114,10 +143,6 @@ class TapsellAdManager private constructor() : AdManager {
         return initialized
     }
 
-    /**
-     * A rewarded ad is ready only when Tapsell has returned
-     * a real response ID.
-     */
     override fun isRewardedAdReady(): Boolean {
         return isConfigured() &&
                 initialized &&
@@ -137,41 +162,56 @@ class TapsellAdManager private constructor() : AdManager {
         }
     }
 
-    fun getAppKey(): String = appKey
+    fun getAppKey(): String {
+        return appKey
+    }
 
-    fun getRewardedZoneId(): String = rewardedZoneId
+    fun getRewardedZoneId(): String {
+        return rewardedZoneId
+    }
 
-    fun getBannerZoneId(): String = bannerZoneId
+    fun getBannerZoneId(): String {
+        return bannerZoneId
+    }
 
-    /**
-     * Requests a real rewarded video from Tapsell Plus.
-     *
-     * IMPORTANT:
-     * This function does NOT grant any reward.
-     * Reward is granted only inside onRewarded().
-     */
+    // -------------------------------------------------------------------------
+    // Request rewarded video
+    // -------------------------------------------------------------------------
+
     override fun requestRewardedVideo(
         zoneId: String,
         listener: RewardedAdListener?
     ) {
         if (!isConfigured()) {
+
             val errorMessage =
                 "Tapsell App Key is not configured."
 
-            Log.e(TAG, errorMessage)
+            Log.e(
+                TAG,
+                errorMessage
+            )
 
-            listener?.onAdFailedToLoad(errorMessage)
+            listener?.onAdFailedToLoad(
+                errorMessage
+            )
 
             return
         }
 
         if (!initialized) {
+
             val errorMessage =
                 "Tapsell SDK is not initialized."
 
-            Log.e(TAG, errorMessage)
+            Log.e(
+                TAG,
+                errorMessage
+            )
 
-            listener?.onAdFailedToLoad(errorMessage)
+            listener?.onAdFailedToLoad(
+                errorMessage
+            )
 
             return
         }
@@ -183,49 +223,212 @@ class TapsellAdManager private constructor() : AdManager {
                 rewardedZoneId
             }
 
-        if (targetZone.isBlank() ||
+        if (
+            targetZone.isBlank() ||
             targetZone.contains(
                 "YOUR_TAPSELL_REWARDED_ZONE_ID",
                 ignoreCase = true
             )
         ) {
+
             val errorMessage =
                 "Tapsell rewarded Zone ID is not configured."
 
-            Log.e(TAG, errorMessage)
+            Log.e(
+                TAG,
+                errorMessage
+            )
 
-            listener?.onAdFailedToLoad(errorMessage)
+            listener?.onAdFailedToLoad(
+                errorMessage
+            )
 
             return
         }
 
-        // Clear the previous response before requesting a new one.
+        /*
+         * Remove any old response.
+         *
+         * A new request must produce a new response ID.
+         */
         rewardedResponseId = null
-        rewardDeliveredForResponseId = null
+        rewardedResponseAlreadyDelivered = null
 
         Log.d(
             TAG,
-            "Requesting real rewarded video. Zone=$targetZone"
+            "Requesting rewarded video. Zone=$targetZone"
         )
 
         try {
+
+            /*
+             * This matches the official Android sample:
+             *
+             * TapsellPlus.requestRewardedVideoAd(
+             *     activity,
+             *     zoneId,
+             *     callback
+             * )
+             *
+             * The Activity is supplied later through
+             * requestRewardedVideoFromActivity().
+             *
+             * Since the AdManager interface does not currently
+             * provide an Activity parameter, this method cannot
+             * directly call the SDK request method.
+             *
+             * Therefore the actual request is performed by
+             * requestRewardedVideoFromActivity().
+             */
+
+            listener?.onAdFailedToLoad(
+                "Tapsell rewarded request requires an Activity. " +
+                        "Use requestRewardedVideoFromActivity()."
+            )
+
+        } catch (exception: Exception) {
+
+            val errorMessage =
+                exception.message
+                    ?: "Unknown Tapsell request error."
+
+            Log.e(
+                TAG,
+                "Tapsell request exception.",
+                exception
+            )
+
+            listener?.onAdFailedToLoad(
+                errorMessage
+            )
+        }
+    }
+
+    /**
+     * Requests a real rewarded video using the Activity required
+     * by Tapsell Plus SDK.
+     *
+     * This is the real SDK request path.
+     */
+    fun requestRewardedVideoFromActivity(
+        activity: Activity,
+        zoneId: String = rewardedZoneId,
+        listener: RewardedAdListener? = null
+    ) {
+        if (!isConfigured()) {
+
+            val errorMessage =
+                "Tapsell App Key is not configured."
+
+            Log.e(
+                TAG,
+                errorMessage
+            )
+
+            listener?.onAdFailedToLoad(
+                errorMessage
+            )
+
+            return
+        }
+
+        if (!initialized) {
+
+            val errorMessage =
+                "Tapsell SDK is not initialized."
+
+            Log.e(
+                TAG,
+                errorMessage
+            )
+
+            listener?.onAdFailedToLoad(
+                errorMessage
+            )
+
+            return
+        }
+
+        if (activity.isFinishing) {
+
+            val errorMessage =
+                "Activity is finishing."
+
+            Log.e(
+                TAG,
+                errorMessage
+            )
+
+            listener?.onAdFailedToLoad(
+                errorMessage
+            )
+
+            return
+        }
+
+        val targetZone =
+            if (zoneId.isNotBlank()) {
+                zoneId
+            } else {
+                rewardedZoneId
+            }
+
+        if (
+            targetZone.isBlank() ||
+            targetZone.contains(
+                "YOUR_TAPSELL_REWARDED_ZONE_ID",
+                ignoreCase = true
+            )
+        ) {
+
+            val errorMessage =
+                "Tapsell rewarded Zone ID is not configured."
+
+            Log.e(
+                TAG,
+                errorMessage
+            )
+
+            listener?.onAdFailedToLoad(
+                errorMessage
+            )
+
+            return
+        }
+
+        rewardedResponseId = null
+        rewardedResponseAlreadyDelivered = null
+
+        try {
+
             TapsellPlus.requestRewardedVideoAd(
+                activity,
                 targetZone,
                 object : AdRequestCallback() {
 
                     override fun response(
                         tapsellPlusAdModel: TapsellPlusAdModel
                     ) {
-                        super.response(tapsellPlusAdModel)
+                        super.response(
+                            tapsellPlusAdModel
+                        )
+
+                        if (activity.isFinishing) {
+                            return
+                        }
 
                         val responseId =
-                            tapsellPlusAdModel.responseId
+                            tapsellPlusAdModel.getResponseId()
 
-                        if (responseId.isNullOrBlank()) {
+                        if (responseId.isBlank()) {
+
                             val errorMessage =
                                 "Tapsell returned an empty response ID."
 
-                            Log.e(TAG, errorMessage)
+                            Log.e(
+                                TAG,
+                                errorMessage
+                            )
 
                             listener?.onAdFailedToLoad(
                                 errorMessage
@@ -234,21 +437,21 @@ class TapsellAdManager private constructor() : AdManager {
                             return
                         }
 
-                        rewardedResponseId = responseId
+                        rewardedResponseId =
+                            responseId
 
-                        Log.d(
+                        Log.i(
                             TAG,
-                            "Rewarded video loaded successfully."
+                            "Rewarded video loaded. " +
+                                    "Response ID received."
                         )
 
                         listener?.onAdLoaded()
                     }
 
                     override fun error(
-                        message: String
+                        @NonNull message: String
                     ) {
-                        super.error(message)
-
                         rewardedResponseId = null
 
                         Log.e(
@@ -256,11 +459,15 @@ class TapsellAdManager private constructor() : AdManager {
                             "Rewarded video request failed: $message"
                         )
 
-                        listener?.onAdFailedToLoad(message)
+                        listener?.onAdFailedToLoad(
+                            message
+                        )
                     }
                 }
             )
+
         } catch (exception: Exception) {
+
             rewardedResponseId = null
 
             val errorMessage =
@@ -273,67 +480,106 @@ class TapsellAdManager private constructor() : AdManager {
                 exception
             )
 
-            listener?.onAdFailedToLoad(errorMessage)
+            listener?.onAdFailedToLoad(
+                errorMessage
+            )
         }
     }
 
-    /**
-     * Shows the real rewarded video.
-     *
-     * IMPORTANT:
-     * No reward is granted from onClosed().
-     * The only reward path is onRewarded().
-     */
+    // -------------------------------------------------------------------------
+    // Show rewarded video
+    // -------------------------------------------------------------------------
+
     override fun showRewardedVideo(
         activity: Activity,
         zoneId: String,
         listener: RewardedAdListener
     ) {
         if (!isConfigured()) {
+
             val errorMessage =
                 "Tapsell App Key is not configured."
 
-            Log.e(TAG, errorMessage)
+            Log.e(
+                TAG,
+                errorMessage
+            )
 
-            listener.onAdShowFailed(errorMessage)
+            listener.onAdShowFailed(
+                errorMessage
+            )
 
             return
         }
 
         if (!initialized) {
+
             val errorMessage =
                 "Tapsell SDK is not initialized."
 
-            Log.e(TAG, errorMessage)
+            Log.e(
+                TAG,
+                errorMessage
+            )
 
-            listener.onAdShowFailed(errorMessage)
+            listener.onAdShowFailed(
+                errorMessage
+            )
 
             return
         }
 
-        val responseId = rewardedResponseId
+        if (activity.isFinishing) {
+
+            val errorMessage =
+                "Activity is finishing."
+
+            Log.e(
+                TAG,
+                errorMessage
+            )
+
+            listener.onAdShowFailed(
+                errorMessage
+            )
+
+            return
+        }
+
+        val responseId =
+            rewardedResponseId
 
         if (responseId.isNullOrBlank()) {
+
             val errorMessage =
-                "No rewarded video is ready. Request an ad first."
+                "No rewarded video is ready."
 
-            Log.e(TAG, errorMessage)
+            Log.e(
+                TAG,
+                errorMessage
+            )
 
-            listener.onAdShowFailed(errorMessage)
+            listener.onAdShowFailed(
+                errorMessage
+            )
 
             return
         }
 
-        // Consume the response ID immediately so the same ad
-        // cannot be shown twice accidentally.
+        /*
+         * Consume response immediately.
+         *
+         * The same response ID must never be shown twice.
+         */
         rewardedResponseId = null
 
-        Log.d(
+        Log.i(
             TAG,
-            "Showing real rewarded video."
+            "Showing real Tapsell rewarded video."
         )
 
         try {
+
             TapsellPlus.showRewardedVideoAd(
                 activity,
                 responseId,
@@ -342,7 +588,9 @@ class TapsellAdManager private constructor() : AdManager {
                     override fun onOpened(
                         tapsellPlusAdModel: TapsellPlusAdModel
                     ) {
-                        super.onOpened(tapsellPlusAdModel)
+                        super.onOpened(
+                            tapsellPlusAdModel
+                        )
 
                         Log.d(
                             TAG,
@@ -355,34 +603,45 @@ class TapsellAdManager private constructor() : AdManager {
                     override fun onClosed(
                         tapsellPlusAdModel: TapsellPlusAdModel
                     ) {
-                        super.onClosed(tapsellPlusAdModel)
+                        super.onClosed(
+                            tapsellPlusAdModel
+                        )
+
+                        val rewardWasDelivered =
+                            rewardedResponseAlreadyDelivered ==
+                                    responseId
 
                         Log.d(
                             TAG,
-                            "Rewarded video closed."
+                            "Rewarded video closed. " +
+                                    "Reward delivered=$rewardWasDelivered"
                         )
 
-                        // NEVER grant coins here.
+                        /*
+                         * IMPORTANT:
+                         * NEVER grant the reward here.
+                         */
                         listener.onAdClosed(
                             rewardCompleted =
-                                rewardDeliveredForResponseId ==
-                                        responseId
+                                rewardWasDelivered
                         )
                     }
 
                     override fun onRewarded(
                         tapsellPlusAdModel: TapsellPlusAdModel
                     ) {
-                        super.onRewarded(tapsellPlusAdModel)
+                        super.onRewarded(
+                            tapsellPlusAdModel
+                        )
 
                         /*
-                         * This is the ONLY place where the app
-                         * considers the Tapsell reward verified.
+                         * Duplicate protection.
                          */
                         if (
-                            rewardDeliveredForResponseId ==
+                            rewardedResponseAlreadyDelivered ==
                             responseId
                         ) {
+
                             Log.w(
                                 TAG,
                                 "Duplicate reward callback ignored."
@@ -391,7 +650,11 @@ class TapsellAdManager private constructor() : AdManager {
                             return
                         }
 
-                        rewardDeliveredForResponseId =
+                        /*
+                         * This is the ONLY callback that marks
+                         * the ad as reward-verified.
+                         */
+                        rewardedResponseAlreadyDelivered =
                             responseId
 
                         Log.i(
@@ -400,7 +663,7 @@ class TapsellAdManager private constructor() : AdManager {
                         )
 
                         listener.onRewardEarned(
-                            rewardAmount = 50
+                            rewardAmount = REWARD_COINS
                         )
                     }
 
@@ -417,7 +680,7 @@ class TapsellAdManager private constructor() : AdManager {
 
                         Log.e(
                             TAG,
-                            "Rewarded video show error: $errorMessage"
+                            "Rewarded video error: $errorMessage"
                         )
 
                         listener.onAdShowFailed(
@@ -426,7 +689,9 @@ class TapsellAdManager private constructor() : AdManager {
                     }
                 }
             )
+
         } catch (exception: Exception) {
+
             val errorMessage =
                 exception.message
                     ?: "Unknown Tapsell show error."
@@ -443,34 +708,46 @@ class TapsellAdManager private constructor() : AdManager {
         }
     }
 
-    /**
-     * Native banner is intentionally not simulated anymore.
-     *
-     * The previous implementation created fake advertisement
-     * data, which must never be used in a production monetized app.
-     */
+    // -------------------------------------------------------------------------
+    // Banner
+    // -------------------------------------------------------------------------
+
     override fun requestNativeBanner(
         zoneId: String,
         listener: NativeAdListener
     ) {
+        /*
+         * The previous implementation generated fake banner data.
+         *
+         * That behavior has intentionally been removed.
+         * A real Tapsell banner integration will be added separately.
+         */
         val errorMessage =
-            "Native banner simulation has been disabled. " +
-                    "Use the real Tapsell Standard Banner SDK integration."
+            "Fake native banner disabled. " +
+                    "Real Tapsell banner integration is required."
 
-        Log.w(TAG, errorMessage)
+        Log.w(
+            TAG,
+            errorMessage
+        )
 
-        listener.onAdFailed(errorMessage)
+        listener.onAdFailed(
+            errorMessage
+        )
     }
 
-    /**
-     * Clears the currently cached rewarded response.
-     */
+    // -------------------------------------------------------------------------
+    // Cleanup
+    // -------------------------------------------------------------------------
+
     fun clearRewardedAd() {
         rewardedResponseId = null
-        rewardDeliveredForResponseId = null
+        rewardedResponseAlreadyDelivered = null
     }
 
-    private fun maskKey(key: String): String {
+    private fun maskKey(
+        key: String
+    ): String {
         return if (key.length > 8) {
             "${key.take(4)}...${key.takeLast(4)}"
         } else {
