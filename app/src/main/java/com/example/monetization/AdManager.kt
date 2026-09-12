@@ -4,7 +4,13 @@ import android.app.Activity
 import android.content.Context
 
 /**
- * Data representation for Native Banner advertisements.
+ * Data model for a native/banner-style ad.
+ *
+ * This model is kept for compatibility with the existing
+ * monetization architecture.
+ *
+ * IMPORTANT:
+ * No reward or coins must ever be granted from this model.
  */
 data class NativeAdData(
     val adId: String,
@@ -18,62 +24,166 @@ data class NativeAdData(
 )
 
 /**
- * Callback for Rewarded Video playback lifecycle and reward delivery.
- * Coins/Rewards are strictly verified and only delivered upon [onRewardEarned].
+ * Listener for rewarded-video lifecycle events.
+ *
+ * SECURITY RULE:
+ * Coins must ONLY be granted from onRewardEarned().
+ *
+ * These callbacks must NEVER be treated as proof of reward:
+ * - onAdLoaded()
+ * - onAdOpened()
+ * - onAdClosed()
+ * - onAdFailedToLoad()
+ * - onAdShowFailed()
  */
 interface RewardedAdListener {
-    /** Called when the ad is loaded and ready to be shown. */
+
+    /**
+     * A rewarded ad has been successfully loaded
+     * and is ready to be shown.
+     */
     fun onAdLoaded()
 
-    /** Called when the ad fails to load from the ad server. */
-    fun onAdFailedToLoad(error: String)
+    /**
+     * The rewarded ad failed to load.
+     */
+    fun onAdFailedToLoad(
+        error: String
+    )
 
-    /** Called when the ad starts displaying on screen. */
+    /**
+     * The rewarded ad was opened/displayed.
+     */
     fun onAdOpened()
 
     /**
-     * CRITICAL: Called ONLY when the user has fully watched the ad
-     * and the ad provider has verified the reward grant.
+     * The Tapsell SDK has explicitly confirmed
+     * that the user earned the reward.
+     *
+     * THIS IS THE ONLY CALLBACK THAT MAY TRIGGER
+     * ADDING COINS TO THE USER'S ACCOUNT.
      */
-    fun onRewardEarned(rewardAmount: Int)
-
-    /** Called when the ad is closed by the user. */
-    fun onAdClosed(rewardCompleted: Boolean)
-
-    /** Called when the ad fails to display. */
-    fun onAdShowFailed(error: String)
-}
-
-/**
- * Callback for Native Banner ad loading.
- */
-interface NativeAdListener {
-    fun onAdLoaded(adData: NativeAdData)
-    fun onAdFailed(error: String)
-}
-
-/**
- * Standard AdManager interface for mobile ad networks (Tapsell, AdMob, etc.).
- */
-interface AdManager {
-    /** Initializes the ad network SDK with the provided credentials. */
-    fun initialize(context: Context, appKey: String)
-
-    /** Check if the SDK is initialized with valid credentials. */
-    fun isInitialized(): Boolean
-
-    /** Checks if a rewarded video is ready to show. */
-    fun isRewardedAdReady(): Boolean
-
-    /** Requests a rewarded video ad from the network. */
-    fun requestRewardedVideo(zoneId: String, listener: RewardedAdListener? = null)
+    fun onRewardEarned(
+        rewardAmount: Int
+    )
 
     /**
-     * Displays a rewarded video ad.
-     * The reward is only provided if [RewardedAdListener.onRewardEarned] triggers.
+     * The rewarded ad was closed.
+     *
+     * rewardCompleted indicates whether the SDK's
+     * reward callback was already received.
+     *
+     * This callback MUST NOT independently grant coins.
      */
-    fun showRewardedVideo(activity: Activity, zoneId: String, listener: RewardedAdListener)
+    fun onAdClosed(
+        rewardCompleted: Boolean
+    )
 
-    /** Loads a native banner ad for display. */
-    fun requestNativeBanner(zoneId: String, listener: NativeAdListener)
+    /**
+     * The rewarded ad failed while being shown.
+     */
+    fun onAdShowFailed(
+        error: String
+    )
+}
+
+/**
+ * Listener for native/banner-style ad loading.
+ *
+ * This listener has no reward-related functionality.
+ */
+interface NativeAdListener {
+
+    /**
+     * A native/banner ad was loaded.
+     */
+    fun onAdLoaded(
+        adData: NativeAdData
+    )
+
+    /**
+     * The ad failed to load.
+     */
+    fun onAdFailed(
+        error: String
+    )
+}
+
+/**
+ * Common abstraction for the application's ad manager.
+ *
+ * The real implementation is TapsellAdManager.
+ *
+ * IMPORTANT ARCHITECTURE:
+ *
+ * ViewModel must not own an Activity.
+ * Therefore Activity-dependent operations are exposed
+ * explicitly and are intended to be called from the UI layer
+ * (for example MainActivity).
+ */
+interface AdManager {
+
+    /**
+     * Initializes the advertising SDK.
+     *
+     * This should normally be called once from the application/
+     * activity startup flow.
+     */
+    fun initialize(
+        context: Context,
+        appKey: String
+    )
+
+    /**
+     * Returns true when the ad SDK has completed
+     * successful initialization.
+     */
+    fun isInitialized(): Boolean
+
+    /**
+     * Returns true when a rewarded ad response is ready
+     * to be shown.
+     */
+    fun isRewardedAdReady(): Boolean
+
+    /**
+     * Requests a rewarded video.
+     *
+     * NOTE:
+     * The concrete Tapsell implementation requires an Activity
+     * for this operation. TapsellAdManager therefore exposes
+     * requestRewardedVideoFromActivity().
+     *
+     * This interface method remains for compatibility with
+     * existing project code and must not be used as the actual
+     * Tapsell request path.
+     */
+    fun requestRewardedVideo(
+        zoneId: String,
+        listener: RewardedAdListener? = null
+    )
+
+    /**
+     * Shows a previously loaded rewarded video.
+     *
+     * The actual reward is delivered only through
+     * RewardedAdListener.onRewardEarned().
+     */
+    fun showRewardedVideo(
+        activity: Activity,
+        zoneId: String,
+        listener: RewardedAdListener
+    )
+
+    /**
+     * Requests a native/banner ad.
+     *
+     * This is kept as part of the monetization abstraction.
+     * The current TapsellAdManager does not yet implement
+     * the real banner UI through this method.
+     */
+    fun requestNativeBanner(
+        zoneId: String,
+        listener: NativeAdListener
+    )
 }
