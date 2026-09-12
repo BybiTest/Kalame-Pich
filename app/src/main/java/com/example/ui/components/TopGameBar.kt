@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ColorLens
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MonetizationOn
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.VolumeMute
@@ -55,6 +56,7 @@ fun TopGameBar(
     onOpenThemes: () -> Unit,
     onToggleSound: () -> Unit,
     onOpenDevGuide: () -> Unit,
+    onOpenAbout: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "wheel_pulse")
@@ -251,6 +253,21 @@ fun TopGameBar(
                         imageVector = Icons.Default.Code,
                         contentDescription = "راهنمای درآمدزایی بازار و تپسل",
                         tint = theme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                // About App & Developer Credit
+                IconButton(
+                    onClick = onOpenAbout,
+                    modifier = Modifier
+                        .size(32.dp)
+                        .testTag("about_app_btn")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = "درباره سازنده و بازی",
+                        tint = theme.primaryVariant,
                         modifier = Modifier.size(18.dp)
                     )
                 }

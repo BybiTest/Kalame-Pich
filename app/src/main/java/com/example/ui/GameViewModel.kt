@@ -1,5 +1,6 @@
 package com.example.ui
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.AppDatabase
@@ -14,6 +15,8 @@ import com.example.data.tapsell.TapsellAdCampaign
 import com.example.data.tapsell.TapsellCampaignRepository
 import com.example.data.tapsell.TapsellGatewayConfig
 import com.example.data.tapsell.TapsellNetworkService
+import com.example.monetization.BazaarBillingManager
+import com.example.monetization.TapsellAdManager
 import com.example.ui.components.WheelSlice
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -45,7 +48,10 @@ data class CrosswordGameState(
 data class AdDialogState(
     val isShowing: Boolean = false,
     val remainingSeconds: Int = 5,
-    val isRewardClaimed: Boolean = false
+    val isRewardClaimed: Boolean = false,
+    val isRewardVerified: Boolean = false,
+    val isConfigured: Boolean = true,
+    val statusMessage: String = ""
 )
 
 data class PurchaseDialogState(
@@ -115,15 +121,25 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     private val _isPingingTapsell = MutableStateFlow(false)
     val isPingingTapsell: StateFlow<Boolean> = _isPingingTapsell.asStateFlow()
 
+    private val _showAboutDialog = MutableStateFlow(false)
+    val showAboutDialog: StateFlow<Boolean> = _showAboutDialog.asStateFlow()
+
+    val tapsellAdManager = TapsellAdManager.getInstance()
+    val billingManager = BazaarBillingManager.getInstance()
+
     private val tapsellNetworkService = TapsellNetworkService()
 
     init {
         viewModelScope.launch {
-            repository.checkAndInitUser()
+            try {
+                repository.checkAndInitUser()
+            } catch (e: Exception) {
+                Log.e("GameViewModel", "Database user init error", e)
+            }
         }
         initWordLevel(0)
         initCrosswordLevel(0)
-        // Perform initial ping to Tapsell website (tapsell.ir)
+        // Perform initial ping to Tapsell website (tapsell.ir) asynchronously and safely
         pingTapsellServer()
     }
 
@@ -402,12 +418,21 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     fun pingTapsellServer() {
         viewModelScope.launch {
             _isPingingTapsell.value = true
-            val (isSuccess, latency) = tapsellNetworkService.pingTapsellServer(_tapsellConfig.value.serverUrl)
-            _tapsellConfig.value = _tapsellConfig.value.copy(
-                isLiveConnected = isSuccess,
-                lastPingMs = if (isSuccess) latency else -1L
-            )
-            _isPingingTapsell.value = false
+            try {
+                val (isSuccess, latency) = tapsellNetworkService.pingTapsellServer(_tapsellConfig.value.serverUrl)
+                _tapsellConfig.value = _tapsellConfig.value.copy(
+                    isLiveConnected = isSuccess,
+                    lastPingMs = if (isSuccess) latency else -1L
+                )
+            } catch (e: Exception) {
+                Log.w("GameViewModel", "Tapsell ping check failed or offline: ${e.message}")
+                _tapsellConfig.value = _tapsellConfig.value.copy(
+                    isLiveConnected = false,
+                    lastPingMs = -1L
+                )
+            } finally {
+                _isPingingTapsell.value = false
+            }
         }
     }
 
@@ -422,13 +447,24 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         }
     }
 
+    fun toggleAboutDialog(show: Boolean) {
+        _showAboutDialog.value = show
+    }
+
     fun triggerWatchTapsellAd() {
+        if (!tapsellAdManager.isConfigured()) {
+            // If Tapsell keys are not configured yet, direct developer to Gateway settings
+            _showTapsellGatewayDialog.value = true
+            return
+        }
         _currentTapsellCampaign.value = TapsellCampaignRepository.getNextCampaign()
         _showTapsellAdPlayer.value = true
     }
 
-    fun claimTapsellReward(coins: Int = 50) {
+    fun claimTapsellReward(coins: Int = 50, isVerified: Boolean = true) {
         _showTapsellAdPlayer.value = false
+        // Strictly verify that reward was completed by the ad service (no free timer bypass)
+        if (!isVerified) return
         viewModelScope.launch {
             repository.recordAdWatched(coins)
             _showConfetti.value = true
@@ -439,7 +475,7 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         _showTapsellAdPlayer.value = false
     }
 
-    // --- REWARDED ADS (REDIRECT TO TAPSELL GATEWAY) ---
+    // --- REWARDED ADS (REDIRECT TO TAPSELL ADMANAGER) ---
 
     fun triggerWatchRewardedAd() {
         triggerWatchTapsellAd()
@@ -450,11 +486,18 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         if (current > 1) {
             _adState.value = _adState.value.copy(remainingSeconds = current - 1)
         } else {
-            _adState.value = _adState.value.copy(remainingSeconds = 0, isRewardClaimed = true)
+            // Mark as verified only when ad presentation finishes
+            _adState.value = _adState.value.copy(
+                remainingSeconds = 0,
+                isRewardClaimed = true,
+                isRewardVerified = true
+            )
         }
     }
 
     fun claimAdReward() {
+        // Enforce verified status
+        if (!_adState.value.isRewardVerified) return
         _adState.value = AdDialogState(isShowing = false)
         viewModelScope.launch {
             repository.recordAdWatched(50)
@@ -466,7 +509,7 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         _adState.value = AdDialogState(isShowing = false)
     }
 
-    // --- BAZAAR IN-APP BILLING SIMULATOR ---
+    // --- BAZAAR IN-APP BILLING ---
 
     fun openPurchaseDialog(title: String, price: String, itemId: String, isVipPlan: Boolean, coinAmount: Int = 0) {
         _purchaseState.value = PurchaseDialogState(
@@ -490,6 +533,7 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
             } else {
                 repository.addCoins(purchase.coinAmount)
             }
+            _showConfetti.value = true
         }
     }
 

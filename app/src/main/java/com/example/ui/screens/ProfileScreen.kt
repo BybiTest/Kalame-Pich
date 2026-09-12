@@ -73,6 +73,7 @@ fun ProfileScreen(
     onOpenLuckyWheel: () -> Unit,
     onOpenPiggyBank: () -> Unit,
     onOpenTapsellGateway: () -> Unit = {},
+    onOpenAbout: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val userXp = user?.xp ?: 0
@@ -88,7 +89,7 @@ fun ProfileScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(theme.backgroundGradient))
+            .background(theme.backgroundGradient)
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -244,7 +245,7 @@ fun ProfileScreen(
                         modifier = Modifier
                             .size(44.dp)
                             .clip(CircleShape)
-                            .background(Brush.linearGradient(theme.letterWheelGradient)),
+                            .background(Brush.linearGradient(theme.letterButtonGradient)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -476,6 +477,72 @@ fun ProfileScreen(
                             color = theme.cardBorder.copy(alpha = 0.5f)
                         )
                     }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        // Developer Credit & About Section - سیدحمیدموسوی زاده
+        Card(
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFFF0F7FF)),
+            border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFF64B5F6)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .clickable { onOpenAbout() }
+                .testTag("about_developer_profile_card")
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        shape = CircleShape,
+                        color = Color(0xFF1976D2),
+                        modifier = Modifier.size(42.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Person,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = "سازنده و توسعه‌دهنده:",
+                            fontSize = 11.sp,
+                            color = Color(0xFF546E7A)
+                        )
+                        Text(
+                            text = "سیدحمیدموسوی زاده",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = Color(0xFF0D47A1)
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = Color(0xFFE3F2FD)
+                ) {
+                    Text(
+                        text = "درباره ما",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1565C0),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                    )
                 }
             }
         }

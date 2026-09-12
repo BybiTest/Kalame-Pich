@@ -60,7 +60,7 @@ import com.example.ui.theme.GameThemes
 fun CrosswordGameScreen(
     state: CrosswordGameState,
     user: UserEntity?,
-    theme: GameTheme = GameThemes.turquoiseTheme,
+    theme: GameTheme = GameThemes.TURQUOISE,
     onSelectCell: (Int, Int) -> Unit,
     onInputChar: (Char) -> Unit,
     onClearCell: () -> Unit,

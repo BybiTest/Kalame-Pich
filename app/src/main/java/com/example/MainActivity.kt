@@ -48,12 +48,12 @@ import com.example.ui.components.DeveloperGuideDialog
 import com.example.ui.components.LuckyWheelDialog
 import com.example.ui.components.PiggyBankDialog
 import com.example.ui.components.RewardedAdDialog
-import com.example.ui.components.SpecialRewardsDialogsKt
 import com.example.ui.components.StarChestDialog
 import com.example.ui.components.TapsellAdPlayerDialog
 import com.example.ui.components.TapsellGatewayDialog
 import com.example.ui.components.ThemeSelectorDialog
 import com.example.ui.components.TopGameBar
+import com.example.ui.screens.AboutDialog
 import com.example.ui.screens.CrosswordGameScreen
 import com.example.ui.screens.ProfileScreen
 import com.example.ui.screens.StoreScreen
@@ -145,6 +145,7 @@ fun MainGameApp(
     val showTapsellAdPlayer by viewModel.showTapsellAdPlayer.collectAsStateWithLifecycle()
     val showTapsellGatewayDialog by viewModel.showTapsellGatewayDialog.collectAsStateWithLifecycle()
     val isPingingTapsell by viewModel.isPingingTapsell.collectAsStateWithLifecycle()
+    val showAboutDialog by viewModel.showAboutDialog.collectAsStateWithLifecycle()
 
     val currentTheme = GameThemes.getThemeById(user?.selectedThemeId ?: "turquoise")
 
@@ -178,7 +179,8 @@ fun MainGameApp(
                 onOpenLuckyWheel = { viewModel.toggleLuckyWheel(true) },
                 onOpenThemes = { viewModel.toggleThemeSelector(true) },
                 onToggleSound = { viewModel.toggleSound() },
-                onOpenDevGuide = { viewModel.toggleDevMonetizationGuide(true) }
+                onOpenDevGuide = { viewModel.toggleDevMonetizationGuide(true) },
+                onOpenAbout = { viewModel.toggleAboutDialog(true) }
             )
         },
         bottomBar = {
@@ -344,7 +346,8 @@ fun MainGameApp(
                     onOpenThemeSelector = { viewModel.toggleThemeSelector(true) },
                     onOpenLuckyWheel = { viewModel.toggleLuckyWheel(true) },
                     onOpenPiggyBank = { viewModel.togglePiggyBank(true) },
-                    onOpenTapsellGateway = { viewModel.toggleTapsellGateway(true) }
+                    onOpenTapsellGateway = { viewModel.toggleTapsellGateway(true) },
+                    onOpenAbout = { viewModel.toggleAboutDialog(true) }
                 )
             }
 
@@ -483,6 +486,12 @@ fun MainGameApp(
             onSaveConfig = { newConfig -> viewModel.updateTapsellConfig(newConfig) },
             onTestWatchAd = { viewModel.triggerWatchTapsellAd() },
             onDismiss = { viewModel.toggleTapsellGateway(false) }
+        )
+
+        // 11. About & Developer Identification Dialog (سیدحمیدموسوی زاده)
+        AboutDialog(
+            isOpen = showAboutDialog,
+            onDismiss = { viewModel.toggleAboutDialog(false) }
         )
     }
 }

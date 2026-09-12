@@ -101,7 +101,7 @@ fun WordGameScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Brush.verticalGradient(theme.backgroundGradient))
+                .background(theme.backgroundGradient)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 10.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -515,7 +515,7 @@ fun WordGameScreen(
                             .size(54.dp)
                             .shadow(6.dp, CircleShape)
                             .clip(CircleShape)
-                            .background(Brush.linearGradient(theme.letterWheelGradient))
+                            .background(Brush.linearGradient(theme.letterButtonGradient))
                             .border(2.dp, theme.accent, CircleShape)
                             .clickable { onSelectLetter(char) }
                             .testTag("letter_btn_$index"),
